@@ -36,23 +36,24 @@ public final class Loop {
     /// The default loop.
     public static let shared = Loop()
     
-    private var currentAnimationTime: Double = 0.0
+    fileprivate var currentAnimationTime: Double = 0.0
     
-    private lazy var displayLink: CADisplayLink = {
-        let link = CADisplayLink(target: self, selector: "displayLinkDidFire:")
-        link.paused = true
-        link.addToRunLoop(NSRunLoop.mainRunLoop(), forMode: NSRunLoopCommonModes)
+    fileprivate lazy var displayLink: DisplayLink = {
+        let link = DisplayLink()
+        link.callback = { [unowned self] (frame) in
+            self.displayLinkDidFire(frame)
+        }
         return link
     }()
     
-    private var tokens: Set<LoopSubscription.Token> = []
+    fileprivate var tokens: Set<LoopSubscription.Token> = []
     
     /// All currently active subscriptions.
     public var subscriptions: [LoopSubscription] {
         return tokens.filter({$0.subscription != nil}).map({ $0.subscription! })
     }
     
-    private init() {
+    fileprivate init() {
 
     }
     
@@ -63,37 +64,37 @@ public final class Loop {
         return LoopSubscription(loop: self)
     }
     
-    private func add(subscription: LoopSubscription) {
+    fileprivate func add(_ subscription: LoopSubscription) {
         assert(subscription.loop === self)
         tokens.insert(subscription.token)
         startIfNeeded()
     }
     
-    private func remove(subscription: LoopSubscription) {
+    fileprivate func remove(_ subscription: LoopSubscription) {
         assert(subscription.loop === self)
         tokens.remove(subscription.token)
         stopIfPossible()
     }
     
-    private func startIfNeeded() {
+    fileprivate func startIfNeeded() {
         guard tokens.count > 0 else { return }
         guard displayLink.paused == true else { return }
         displayLink.paused = false
         currentAnimationTime = 0
     }
     
-    private func stopIfPossible() {
+    fileprivate func stopIfPossible() {
         guard tokens.count == 0 else { return }
         guard displayLink.paused == false else { return }
         displayLink.paused = true
     }
     
-    dynamic private func displayLinkDidFire(displayLink: CADisplayLink) {
+    fileprivate func displayLinkDidFire(_ frame: DisplayLink.Frame) {
         
-        let timestamp = max(displayLink.timestamp, currentAnimationTime)
+        let timestamp = max(frame.timestamp, currentAnimationTime)
         
         if currentAnimationTime == 0.0 {
-            currentAnimationTime = timestamp - displayLink.duration
+            currentAnimationTime = timestamp - frame.duration
         }
         
         let elapsed = timestamp - currentAnimationTime
@@ -117,17 +118,17 @@ public final class Loop {
 /// The interface through which consumers can respond to animation loop updates.
 public final class LoopSubscription {
     
-    private final class Token: Hashable {
+    fileprivate final class Token: Hashable {
         weak var subscription: LoopSubscription?
         init(subscription: LoopSubscription) {
             self.subscription = subscription
         }
         var hashValue: Int {
-            return unsafeAddressOf(self).hashValue
+            return Unmanaged.passUnretained(self).toOpaque().hashValue
         }
     }
     
-    private lazy var token: Token = {
+    fileprivate lazy var token: Token = {
         return Token(subscription: self)
     }()
     
@@ -151,7 +152,7 @@ public final class LoopSubscription {
         }
     }
     
-    private init(loop: Loop) {
+    fileprivate init(loop: Loop) {
         self.loop = loop
     }
     
@@ -159,7 +160,7 @@ public final class LoopSubscription {
         paused = true
     }
     
-    private func advance(elapsed: Double) {
+    fileprivate func advance(_ elapsed: Double) {
         advanced.fire(elapsed)
     }
 }
